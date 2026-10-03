@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PBGM — Personal Behavioral Generative Model</title>
+<style>
+:root{--bg:#0b1020;--panel:#11182b;--panel2:#17213a;--text:#edf2ff;--muted:#9eabc7;--line:#2a3757;--accent:#73a7ff;--accent2:#9b7cff;--good:#55d6a7;--warn:#ffc56b;--bad:#ff7d8b}
+*{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 15% 0%,#18284b 0,#0b1020 38%,#080c17 100%);color:var(--text);font-family:Tahoma,"Segoe UI",sans-serif}
+header{padding:24px 28px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,16,32,.9);backdrop-filter:blur(12px);z-index:5}
+h1{margin:0 0 7px;font-size:25px} .sub{color:var(--muted);font-size:13px;line-height:1.9}
+.wrap{max-width:1500px;margin:auto;padding:20px}.grid{display:grid;grid-template-columns:390px 1fr;gap:18px}
+.card{background:linear-gradient(145deg,rgba(23,33,58,.95),rgba(13,19,35,.96));border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 15px 40px #0004}
+.card h2{font-size:16px;margin:0 0 13px}.small{font-size:11px;color:var(--muted)}
+label{display:block;font-size:12px;color:#cbd5ee;margin:10px 0 5px}
+input,textarea,select{width:100%;background:#0b1224;color:var(--text);border:1px solid #344361;border-radius:10px;padding:10px;font:inherit;outline:none}
+textarea{min-height:150px;resize:vertical;line-height:1.8}
+input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+button{border:0;border-radius:10px;padding:10px 13px;background:linear-gradient(135deg,#5e8fff,#8d68ff);color:#fff;font-weight:700;cursor:pointer}
+button.secondary{background:#202c47;border:1px solid #3a4a70}button.good{background:linear-gradient(135deg,#2eaf88,#4b7cff)}button.danger{background:#542735}
+button:disabled{opacity:.45;cursor:not-allowed}
+.sliders{max-height:650px;overflow:auto;padding-left:3px}.srow{padding:8px 0;border-bottom:1px solid #23304b}.shead{display:flex;justify-content:space-between;font-size:12px}.value{font-variant-numeric:tabular-nums;color:#9dc1ff}
+input[type=range]{padding:0;height:5px;accent-color:#76a5ff}
+canvas{width:100%;height:370px;background:#09101f;border:1px solid #263451;border-radius:12px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:14px}.kpi{background:#0c1427;border:1px solid #263451;border-radius:12px;padding:12px}.kpi b{display:block;font-size:20px;margin-top:5px}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:13px 0}.node{background:#0c1427;border:1px solid #2d3c5d;border-radius:11px;padding:10px;text-align:center;font-size:12px}.arrow{color:#7894c9}
+.output{white-space:pre-wrap;line-height:1.9;font-size:13px;color:#dce5ff;max-height:330px;overflow:auto}
+.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#202d4a;color:#aac4ff;font-size:11px;margin:2px}
+.status{font-size:11px;color:var(--muted);margin-top:8px;min-height:18px}
+.full{grid-column:1/-1}
+@media(max-width:1050px){.grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>PBGM — Personal Behavioral Generative Model</h1>
+  <div class="sub">آزمایشگاه تعاملی برای مدل‌سازی مولد رفتار: وزن‌ها و محیط را تغییر بده، رفتار احتمالی را ببین؛ یا یک رفتار خام وارد کن و از مدل بخواه مهندسی معکوس کند.</div>
+</header>
+
+<div class="wrap">
+<div class="grid">
+
+<section class="card">
+  <h2>۱) متغیرهای پنهان رفتاری — دوطرفه</h2>
+  <div class="small">وزن‌ها پارامترهای آزمایشی مدل‌اند. هم اسلایدرها و هم نمودار میله‌ای قابل تغییر هستند.</div>
+  <div id="sliders" class="sliders"></div>
+  <canvas id="weightsChart" width="760" height="620" style="height:620px;margin-top:12px"></canvas>
+  <div class="row" style="margin-top:12px">
+    <button class="secondary" onclick="resetWeights()">بازنشانی</button>
+    <button onclick="simulate()">محاسبه رفتار</button>
+  </div>
+</section>
+
+<main>
+  <section class="card">
+    <h2>۲) موتور وضعیت و محیط</h2>
+    <div class="row">
+      <div><label>شدت ابهام تصمیم</label><input id="ambiguity" type="range" min="0" max="100" value="82" oninput="envChanged()"><div class="small" id="ambiguityV">82</div></div>
+      <div><label>شدت تهدید هویتی</label><input id="identityThreat" type="range" min="0" max="100" value="65" oninput="envChanged()"><div class="small" id="identityThreatV">65</div></div>
+      <div><label>اهمیت رابطه</label><input id="relation" type="range" min="0" max="100" value="96" oninput="envChanged()"><div class="small" id="relationV">96</div></div>
+      <div><label>حضور مخاطب</label><input id="audience" type="range" min="0" max="100" value="75" oninput="envChanged()"><div class="small" id="audienceV">75</div></div>
+    </div>
+    <label>زمینه آزاد محیطی</label>
+    <textarea id="environment">پنج روز از قطع همکاری گذشته است. مدیرعامل و مالک شرکت دوست ۲۲ ساله من است. علت قطعی تصمیم روشن نیست و احتمال می‌دهم تصمیم کاملاً مطابق میل او نبوده باشد. فردا احتمال مواجهه مستقیم در کارخانه و اتاق کنفرانس وجود دارد. من همزمان ناراحت، کنجکاو، وفادار، نگران از دست دادن ارتباط و حساس به شأن حرفه‌ای خودم هستم.</textarea>
+    <div class="flow">
+      <div class="node">محیط<br><span class="small">E(t)</span></div><div class="node">حالت درونی<br><span class="small">S(t)</span></div><div class="node">تصمیم<br><span class="small">D(t)</span></div><div class="node">رفتار<br><span class="small">B(t)</span></div>
+    </div>
+    <div class="small">رفتار جدید → بازخورد اجتماعی → حالت جدید → رفتار بعدی؛ مدل برای نمایش این حلقه طراحی شده است.</div>
+  </section>
+
+  <section class="card" style="margin-top:18px">
+    <div class="kpis">
+      <div class="kpi"><span class="small">کنترل روایت</span><b id="kControl">—</b></div>
+      <div class="kpi"><span class="small">شفافیت</span><b id="kClear">—</b></div>
+      <div class="kpi"><span class="small">شدت بیان</span><b id="kIntensity">—</b></div>
+      <div class="kpi"><span class="small">احتمال رفتار ارائه‌ای</span><b id="kPresent">—</b></div>
+    </div>
+    <canvas id="chart" width="1100" height="370"></canvas>
+  </section>
+</main>
+
+<section class="card full">
+  <h2>۳) مدل زبانی — تصمیم‌گیری، پیش‌بینی و مهندسی معکوس</h2>
+  <div class="row">
+    <div><label>Endpoint سازگار با OpenAI</label><input id="endpoint" value="https://api.gapgpt.app/v1/chat/completions"></div>
+    <div><label>Model</label><input id="model" value="gpt-4o"></div>
+    <div><label>API Key</label><input id="apikey" type="password" placeholder="کلید را فقط در همین مرورگر وارد کن"></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="good" onclick="aiPredict()">AI: پیش‌بینی رفتار از state</button>
+    <button class="secondary" onclick="aiReverse()">AI: مهندسی معکوس از رفتار</button>
+    <button class="secondary" onclick="copyPrompt()">کپی Prompt</button>
+  </div>
+
+  <label>رفتار مشاهده‌شده / رفتار فرضی برای مهندسی معکوس</label>
+  <textarea id="observed">فردا وارد کارخانه می‌شوم. بدون اینکه از من خواسته شده باشد، آرام وارد اتاق کنفرانس می‌شوم و شروع می‌کنم درباره مدیریت نوین، رفتار سازمانی و مارکتینگ هوشمند صحبت کردن. در کلامم احترام زیادی به مدیرعامل وجود دارد، اما گاهی کنایه‌های تلخ و نیش‌دار هم ظاهر می‌شود. همزمان نمی‌خواهم ناراحتی‌ام را مستقیماً نشان بدهم و می‌خواهم علت واقعی تصمیم را بفهمم.</textarea>
+
+  <label>خروجی مدل</label>
+  <div id="aiOutput" class="output">هنوز تحلیلی اجرا نشده است.</div>
+  <div class="row" style="margin-top:10px">
+    <button class="secondary" onclick="applyAIWeightsOnly()">اعمال وزن‌های AI روی مدل</button>
+    <button class="secondary" onclick="clearAIOverlay()">پاک کردن لایه AI</button>
+  </div>
+  <div id="status" class="status"></div>
+</section>
+
+<section class="card full">
+  <h2>۴) نمودار ترکیبی رفتار و اثر AI</h2>
+  <div class="small" style="margin-bottom:8px">خطوط فعلی، پیش‌بینی AI و تغییرات پیشنهادی را روی یک فضای مشترک ببین. نقاط AI قابل Drag هستند و در صورت تغییر، وزن متناظر هم به‌روزرسانی می‌شود.</div>
+  <canvas id="behaviorChart" width="1450" height="480"></canvas>
+</section>
+
+<section class="card full">
+  <h2>۵) نقشه تصمیم مدل</h2>
+  <canvas id="decisionChart" width="1450" height="420"></canvas>
+</section>
+
+</div>
+</div>
+
+<script>
+const VARS=[
+["attachment","دلبستگی",82],["loss","فقدان",68],["anger","خشم",42],["loyalty","وفاداری",88],
+["identity","هویت حرفه‌ای",76],["control","کنترل",79],["curiosity","کنجکاوی",91],["justice","عدالت",63],
+["pride","حفظ شأن",74],["uncertainty","عدم قطعیت",86],["hope","امید",48],["respect","احترام",94],
+["clarity","میل به شفافیت",89],["narrative","کنترل روایت",84],["experiment","آزمایش ایده",71],["understanding","نیاز به فهمیده‌شدن",87]
+];
+const $=id=>document.getElementById(id);
+function init(){
+  $("sliders").innerHTML=VARS.map(([k,n,v])=>`<div class="srow"><div class="shead"><span>${n}</span><span class="value" id="v_${k}">${v}</span></div><input id="w_${k}" type="range" min="0" max="100" value="${v}" oninput="sync('${k}')"></div>`).join("");
+  drawAll();
+}
+function sync(k){$("v_"+k).textContent=$("w_"+k).value;drawAll()}
+function getWeights(){let o={};VARS.forEach(([k])=>o[k]=+$("w_"+k).value);return o}
+function env(){
+ return {ambiguity:+$("ambiguity").value,identityThreat:+$("identityThreat").value,relation:+$("relation").value,audience:+$("audience").value,text:$("environment").value}
+}
+function envChanged(){["ambiguity","identityThreat","relation","audience"].forEach(k=>$(k+"V").textContent=$(k).value);drawAll()}
+function resetWeights(){VARS.forEach(([k,,v])=>{$("w_"+k).value=v;sync(k)});drawAll()}
+function clamp(x){return Math.max(0,Math.min(100,x))}
+function simulate(){
+ drawAll();
+ $("aiOutput").textContent="مدل محلی/ریاضی به‌روزرسانی شد. برای تحلیل زبانی، یکی از دو دکمه AI را بزن.";
+}
+function metrics(){
+ const w=getWeights(),e=env();
+ const control=clamp(.55*w.control+.25*w.narrative+.20*w.pride);
+ const clear=clamp(.55*w.clarity+.25*w.curiosity+.20*e.ambiguity);
+ const intensity=clamp(.28*w.anger+.22*w.loss+.18*w.identity+.18*w.pride+.14*e.identityThreat);
+ const presentation=clamp(.22*w.experiment+.20*w.narrative+.18*w.control+.15*w.understanding+.12*w.clarity+.08*e.audience+.05*e.ambiguity);
+ const direct=clamp(.30*w.clarity+.22*w.understanding+.18*w.loyalty+.16*w.respect+.14*(100-e.uncertainty));
+ const irony=clamp(.40*w.anger+.22*w.pride+.18*w.narrative+.12*w.control+.08*e.identityThreat);
+ const reconciliation=clamp(.34*w.attachment+.24*w.loyalty+.18*w.respect+.14*w.hope+.10*w.understanding);
+ const withdrawal=clamp(.30*w.loss+.25*w.uncertainty+.20*w.pride+.15*w.identity+.10*(100-w.hope));
+ return {control,clear,intensity,presentation,direct,irony,reconciliation,withdrawal};
+}
+
+function drawBars(ctx,labels,values,W,H){
+ ctx.clearRect(0,0,W,H);ctx.fillStyle="#09101f";ctx.fillRect(0,0,W,H);
+ const pad=55, top=30, bottom=42, chartH=H-top-bottom, bw=(W-pad*2)/labels.length*.68, gap=(W-pad*2)/labels.length;
+ ctx.strokeStyle="#243250";ctx.lineWidth=1;
+ for(let y=0;y<=100;y+=20){let yy=top+chartH*(1-y/100);ctx.beginPath();ctx.moveTo(pad,yy);ctx.lineTo(W-pad,yy);ctx.stroke();ctx.fillStyle="#7785a3";ctx.font="11px Tahoma";ctx.fillText(y+"%",10,yy+4)}
+ values.forEach((v,i)=>{let x=pad+i*gap+(gap-bw)/2,h=chartH*v/100,y=top+chartH-h;ctx.fillStyle=i%2?"#8c72ff":"#6ea7ff";ctx.fillRect(x,y,bw,h);ctx.save();ctx.translate(x+bw/2,H-9);ctx.rotate(-.28);ctx.fillStyle="#b8c5e1";ctx.textAlign="center";ctx.font="11px Tahoma";ctx.fillText(labels[i],0,0);ctx.restore()});
+}
+
+function metrics(){
+ const w=getWeights(),e=env();
+ const control=clamp(.55*w.control+.25*w.narrative+.20*w.pride);
+ const clear=clamp(.55*w.clarity+.25*w.curiosity+.20*e.ambiguity);
+ const intensity=clamp(.28*w.anger+.22*w.loss+.18*w.identity+.18*w.pride+.14*e.identityThreat);
+ const presentation=clamp(.22*w.experiment+.20*w.narrative+.18*w.control+.15*w.understanding+.12*w.clarity+.08*e.audience+.05*e.ambiguity);
+ const direct=clamp(.30*w.clarity+.22*w.understanding+.18*w.loyalty+.16*w.respect+.14*(100-w.uncertainty));
+ const irony=clamp(.40*w.anger+.22*w.pride+.18*w.narrative+.12*w.control+.08*e.identityThreat);
+ const reconciliation=clamp(.34*w.attachment+.24*w.loyalty+.18*w.respect+.14*w.hope+.10*w.understanding);
+ const withdrawal=clamp(.30*w.loss+.25*w.uncertainty+.20*w.pride+.15*w.identity+.10*(100-w.hope));
+ return {control,clear,intensity,presentation,direct,irony,reconciliation,withdrawal};
+}
+
+let aiState={weights:{},env:{},behavior:"",confidence:null,raw:null};
+
+function aiWeightMap(){
+ const out={};
+ (aiState.raw?.latent_drivers||[]).forEach(x=>{if(x.name)out[x.name]=clamp(+x.weight||0)});
+ (aiState.raw?.inferred_weights||[]).forEach(x=>{if(x.name)out[x.name]=clamp(+x.weight||0)});
+ (aiState.raw?.recommended_weight_changes||[]).forEach(x=>{if(x.name && typeof x.to==="number")out[x.name]=clamp(x.to)});
+ return out;
+}
+
+function drawWeightsInteractive(){
+ const c=$("weightsChart"),ctx=c.getContext("2d"),W=c.width,H=c.height;
+ ctx.clearRect(0,0,W,H);ctx.fillStyle="#09101f";ctx.fillRect(0,0,W,H);
+ const left=70,right=28,top=25,bottom=70,gw=W-left-right,gh=H-top-bottom;
+ const labels=VARS.map(x=>x[1]), vals=VARS.map(x=>+$("w_"+x[0]).value);
+ const gap=gw/labels.length, bw=Math.max(12,gap*.62);
+ ctx.strokeStyle="#253352";
+ for(let y=0;y<=100;y+=20){let yy=top+gh*(1-y/100);ctx.beginPath();ctx.moveTo(left,yy);ctx.lineTo(W-right,yy);ctx.stroke();ctx.fillStyle="#7785a3";ctx.font="11px Tahoma";ctx.fillText(y+"%",25,yy+4)}
+ vals.forEach((v,i)=>{
+   const x=left+i*gap+(gap-bw)/2, y=top+gh*(1-v/100), h=gh*v/100;
+   ctx.fillStyle=(i%2)?"#8c72ff":"#6ea7ff";ctx.fillRect(x,y,bw,h);
+   const ai=aiWeightMap()[VARS[i][0]];
+   if(ai!==undefined){ctx.strokeStyle="#ffc56b";ctx.lineWidth=3;ctx.strokeRect(x-2,top+gh*(1-ai/100)-2,bw+4,gh*ai/100+4)}
+   ctx.save();ctx.translate(x+bw/2,H-12);ctx.rotate(-.42);ctx.fillStyle="#c4cee5";ctx.textAlign="center";ctx.font="10px Tahoma";ctx.fillText(labels[i],0,0);ctx.restore();
+ });
+ ctx.fillStyle="#9eabc7";ctx.font="11px Tahoma";ctx.fillText("میله‌ها را با Drag بالا/پایین کن — وزن همان متغیر تغییر می‌کند",left,15);
+}
+
+function drawTimeline(ctx,m,W,H){
+ ctx.clearRect(0,0,W,H);ctx.fillStyle="#09101f";ctx.fillRect(0,0,W,H);
+ const series=[["کنترل روایت",m.control],["شفافیت",m.clear],["شدت",m.intensity],["ارائه",m.presentation],["کنایه",m.irony],["تعلق/آشتی",m.reconciliation],["عقب‌نشینی",m.withdrawal]];
+ const left=70,right=25,top=35,bottom=48,gw=W-left-right,gh=H-top-bottom;
+ ctx.strokeStyle="#243250";ctx.lineWidth=1;
+ for(let y=0;y<=100;y+=20){let yy=top+gh*(1-y/100);ctx.beginPath();ctx.moveTo(left,yy);ctx.lineTo(W-right,yy);ctx.stroke();ctx.fillStyle="#7f8eac";ctx.font="11px Tahoma";ctx.fillText(y,left-32,yy+4)}
+ series.forEach((s,i)=>{
+   let pts=[];
+   for(let x=0;x<=100;x+=4){let phase=(x/100)*Math.PI*2;let noise=Math.sin(phase*(i+1)+i)*4+Math.cos(phase*2+i)*2;let v=clamp(s[1]+noise-(x>62?i*1.2:0));pts.push([left+gw*x/100,top+gh*(1-v/100)])}
+   ctx.beginPath();pts.forEach((p,j)=>j?ctx.lineTo(...p):ctx.moveTo(...p));ctx.strokeStyle=i%2?"#9b7cff":"#73a7ff";ctx.lineWidth=2;ctx.stroke();
+ });
+ // AI confidence band / markers
+ const ai=aiState.raw;
+ if(ai){
+   const conf=typeof ai.confidence==="number"?clamp(ai.confidence*100):null;
+   if(conf!==null){ctx.setLineDash([7,5]);ctx.strokeStyle="#ffc56b";ctx.lineWidth=2;let yy=top+gh*(1-conf/100);ctx.beginPath();ctx.moveTo(left,yy);ctx.lineTo(W-right,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#ffc56b";ctx.fillText("Confidence AI: "+Math.round(conf)+"%",W-180,yy-7)}
+ }
+ ctx.fillStyle="#71809e";ctx.font="11px Tahoma";ctx.fillText("افق زمانی / تغییر وضعیت →",left,H-13);
+}
+
+function drawDecisionMap(){
+ const c=$("decisionChart"),ctx=c.getContext("2d"),W=c.width,H=c.height;
+ ctx.clearRect(0,0,W,H);ctx.fillStyle="#09101f";ctx.fillRect(0,0,W,H);
+ const m=metrics(), cx=W/2, cy=H/2;
+ const nodes=[
+  ["محیط",env().ambiguity,"#73a7ff",cx,55],
+  ["حالت درونی",m.intensity,"#9b7cff",cx-330,160],
+  ["تصمیم",m.control,"#6ea7ff",cx,175],
+  ["رفتار",m.presentation,"#8c72ff",cx+330,160],
+  ["بازخورد",m.clear,"#55d6a7",cx+210,335],
+  ["حالت جدید",m.reconciliation,"#ffc56b",cx-210,335]
+ ];
+ ctx.font="12px Tahoma";ctx.textAlign="center";
+ // arrows
+ const edges=[[0,1],[0,2],[1,2],[2,3],[3,4],[4,5],[5,1]];
+ edges.forEach(([a,b])=>{const A=nodes[a],B=nodes[b];ctx.strokeStyle="#405174";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(A[3],A[4]);ctx.lineTo(B[3],B[4]);ctx.stroke()});
+ nodes.forEach(n=>{
+   const r=28+n[2]/4;ctx.beginPath();ctx.arc(n[3],n[4],r,0,Math.PI*2);ctx.fillStyle="#121c32";ctx.fill();ctx.strokeStyle=n[2];ctx.lineWidth=3;ctx.stroke();
+   ctx.fillStyle="#edf2ff";ctx.fillText(n[0],n[3],n[4]+4);ctx.fillStyle=n[2];ctx.font="11px Tahoma";ctx.fillText(Math.round(n[1])+"%",n[3],n[4]+r+15);ctx.font="12px Tahoma";
+ });
+ if(aiState.behavior){ctx.fillStyle="#ffc56b";ctx.font="13px Tahoma";ctx.fillText("پیش‌بینی/رفتار AI: "+aiState.behavior.slice(0,120),cx,395)}
+}
+
+function drawAll(){
+ const m=metrics();
+ $("kControl").textContent=Math.round(m.control)+"%";$("kClear").textContent=Math.round(m.clear)+"%";
+ $("kIntensity").textContent=Math.round(m.intensity)+"%";$("kPresent").textContent=Math.round(m.presentation)+"%";
+ drawBars($("chart").getContext("2d"),["کنترل روایت","شفافیت","شدت بیان","ارائه","بیان مستقیم","کنایه","آشتی/تعلق","عقب‌نشینی"],[m.control,m.clear,m.intensity,m.presentation,m.direct,m.irony,m.reconciliation,m.withdrawal],$("chart").width,$("chart").height);
+ drawWeightsInteractive(); drawTimeline($("behaviorChart").getContext("2d"),m,$("behaviorChart").width,$("behaviorChart").height); drawDecisionMap();
+}
+
+function setupCanvasDrag(){
+ const c=$("weightsChart");
+ function pick(e){
+   const r=c.getBoundingClientRect(), x=(e.clientX-r.left)*c.width/r.width, y=(e.clientY-r.top)*c.height/r.height;
+   const left=70,right=28,top=25,bottom=70,gw=c.width-left-right,gh=c.height-top-bottom,gap=gw/VARS.length;
+   let i=Math.floor((x-left)/gap); if(i<0||i>=VARS.length)return null;
+   return {i,y,top,gh};
+ }
+ let active=null;
+ c.addEventListener("pointerdown",e=>{const p=pick(e);if(!p)return;active=p.i;c.setPointerCapture(e.pointerId);updateFromCanvas(e)});
+ c.addEventListener("pointermove",e=>{if(active!==null)updateFromCanvas(e)});
+ c.addEventListener("pointerup",()=>{active=null});
+ c.addEventListener("pointercancel",()=>{active=null});
+ function updateFromCanvas(e){
+   if(active===null)return;const r=c.getBoundingClientRect(),y=(e.clientY-r.top)*c.height/r.height;
+   const top=25,gh=c.height-25-70;const v=clamp(100-(y-top)/gh*100),k=VARS[active][0];
+   $("w_"+k).value=Math.round(v);$("v_"+k).textContent=Math.round(v);drawAll();
+ }
+}
+
+function buildPrompt(mode){
+ const w=getWeights(),e=env(),m=metrics();
+ const context=`تو یک موتور پژوهشی برای PBGM هستی. هدف تشخیص پزشکی یا روان‌پزشکی نیست. فقط یک مدل مهندسی/احتمالاتی از رفتار بساز و عدم قطعیت را صریح نگه دار.
+زمینه: ${e.text}
+محیط عددی: ${JSON.stringify({ambiguity:e.ambiguity,identityThreat:e.identityThreat,relation:e.relation,audience:e.audience})}
+وزن‌های فعلی X: ${JSON.stringify(w)}
+خروجی محلی فعلی: ${JSON.stringify(m)}
+شیء مدیرعامل: friend22y + CEO + owner + authority + decision_maker + emotional_attachment.
+اصول: صداقت + نیاز به فهمیده‌شدن + حفظ شأن + کنترل روایت + کنجکاوی + شفافیت + تعلق + اعتراض + احترام + آزمایش ایده.
+حلقه: محیط → حالت درونی → تصمیم → رفتار → تغییر محیط → بازخورد اجتماعی → حالت درونی جدید → رفتار جدید.
+`;
+ if(mode==="predict") return context+`
+رفتار را قطعی اعلام نکن. چند مسیر محتمل را بررسی کن. weight هر latent_driver باید بین 0 تا 100 باشد و بر اساس داده فعلی استدلال شود. environment_updates فقط از این کلیدها استفاده کند: ambiguity,identityThreat,relation,audience.
+JSON معتبر با ساختار:
+{"state_summary":"","behavior_prediction":"","alternative_behaviors":[""],"latent_drivers":[{"name":"","weight":0,"reason":""}],"environment_updates":[{"name":"","value":0,"reason":""}],"confidence":0,"model_uncertainty":"","next_observation":""}`;
+ return context+`
+رفتار مشاهده‌شده/فرضی:
+${$("observed").value}
+این رفتار را reverse engineer کن. inferred_weights را بین 0 تا 100 بده. environment فقط با کلیدهای ambiguity,identityThreat,relation,audience. چند فرضیه رقیب بده.
+JSON معتبر:
+{"behavior_reading":"","inferred_weights":[{"name":"","weight":0,"reason":""}],"inferred_environment":[{"name":"","value":0,"reason":""}],"competing_hypotheses":[""],"recommended_weight_changes":[{"name":"","from":0,"to":0,"reason":""}],"confidence":0,"uncertainty":"","next_observation":""}`;
+}
+
+function formatObj(o){
+ let s="";
+ for(const [k,v] of Object.entries(o)){s+="◆ "+k+"\n";if(Array.isArray(v))s+=v.map(x=>typeof x==="object"?JSON.stringify(x,null,2):"• "+x).join("\n")+"\n";else if(typeof v==="object"&&v!==null)s+=JSON.stringify(v,null,2)+"\n";else s+=String(v)+"\n";}
+ return s;
+}
+function applyAI(data){
+ if(!data)return;
+ aiState.raw=data;
+ aiState.behavior=data.behavior_prediction||data.behavior_reading||"";
+ aiState.confidence=typeof data.confidence==="number"?data.confidence:null;
+ aiState.weights=aiWeightMap();
+ const envs=data.inferred_environment||data.environment_updates||[];
+ aiState.env={};envs.forEach(x=>{if(x.name)aiState.env[x.name]=+x.value||0});
+ drawAll();
+}
+function applyAIWeightsOnly(){
+ const map=aiWeightMap();Object.entries(map).forEach(([k,v])=>{if($("w_"+k)){$("w_"+k).value=v;$("v_"+k).textContent=v}});
+ const em=aiState.env||{},keys=["ambiguity","identityThreat","relation","audience"];
+ keys.forEach(k=>{if($(k)&&em[k]!==undefined)$(k).value=clamp(em[k])});
+ envChanged();drawAll();
+}
+function clearAIOverlay(){aiState={weights:{},env:{},behavior:"",confidence:null,raw:null};drawAll();$("status").textContent="لایه AI پاک شد؛ وزن‌های دستی حفظ شدند."}
+async function callAI(mode){
+ const key=$("apikey").value.trim(),endpoint=$("endpoint").value.trim(),model=$("model").value.trim();
+ if(!key){$("status").textContent="ابتدا API Key را وارد کن.";return null}
+ $("status").textContent="در حال ارسال داده به مدل زبانی…";
+ const body={model,messages:[{role:"system",content:"You are a careful behavioral systems analyst. Return valid JSON only when requested. Never diagnose or claim certainty about a person's psychology."},{role:"user",content:buildPrompt(mode)}],temperature:.25};
+ try{
+  const r=await fetch(endpoint,{method:"POST",headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const t=await r.text();if(!r.ok)throw new Error("HTTP "+r.status+" — "+t.slice(0,500));
+  const j=JSON.parse(t),content=j.choices?.[0]?.message?.content??JSON.stringify(j);$("status").textContent="پاسخ دریافت شد.";return content;
+ }catch(err){$("status").textContent="خطا: "+err.message;return null}
+}
+function parseJSON(text){try{return JSON.parse(text)}catch(e){const m=text.match(/\{[\s\S]*\}/);try{return m?JSON.parse(m[0]):null}catch(_){return null}}}
+async function aiPredict(){const raw=await callAI("predict");if(!raw)return;const data=parseJSON(raw);$("aiOutput").textContent=data?formatObj(data):raw;if(data)applyAI(data)}
+async function aiReverse(){const raw=await callAI("reverse");if(!raw)return;const data=parseJSON(raw);$("aiOutput").textContent=data?formatObj(data):raw;if(data)applyAI(data)}
+async function copyPrompt(){try{await navigator.clipboard.writeText(buildPrompt("predict"));$("status").textContent="Prompt کپی شد."}catch(e){$("status").textContent="کپی خودکار مجاز نیست."}}
+function envChanged(){["ambiguity","identityThreat","relation","audience"].forEach(k=>$(k+"V").textContent=$(k).value);drawAll()}
+function sync(k){$("v_"+k).textContent=$("w_"+k).value;drawAll()}
+function resetWeights(){VARS.forEach(([k,,v])=>{$("w_"+k).value=v;$("v_"+k).textContent=v});drawAll()}
+function simulate(){drawAll();$("aiOutput").textContent="مدل محلی به‌روزرسانی شد. برای لایه زبانی، AI: پیش‌بینی یا AI: مهندسی معکوس را اجرا کن."}
+
+init();
+setupCanvasDrag();
+drawAll();
+
+</script>
+</body>
+</html>
